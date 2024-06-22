@@ -151,23 +151,17 @@ HRESULT Library_corlib_native_System_DateTime::get_UtcNow___STATIC__SystemDateTi
 {
     NATIVE_PROFILE_CLR_CORE();
     NANOCLR_HEADER();
-    
-    CLR_RT_TypeDescriptor dtType;
-    CLR_INT64*            val;
 
-    CLR_RT_HeapBlock& ref = stack.PushValue();
+    CLR_INT64 *val;
 
-    // initialize <DateTime> type descriptor
-    NANOCLR_CHECK_HRESULT( dtType.InitializeFromType(g_CLR_RT_WellKnownTypes.m_DateTime));
+    CLR_RT_HeapBlock &ref = stack.PushValue();
 
-    // create an instance of <DateTime>
-    NANOCLR_CHECK_HRESULT(g_CLR_RT_ExecutionEngine.NewObject(ref, dtType.m_handlerCls));
+    val = Library_corlib_native_System_DateTime::NewObject(ref);
+    FAULT_ON_NULL(val);
 
-    val = GetValuePtr(ref);
-    
     // load with full date&time
     // including UTC flag
-    *val = HAL_Time_CurrentDateTime(false) | s_UTCMask;
+    *val = (CLR_INT64)(HAL_Time_CurrentDateTime(false) | s_UTCMask);
 
     NANOCLR_NOCLEANUP();
 }
@@ -177,24 +171,32 @@ HRESULT Library_corlib_native_System_DateTime::get_Today___STATIC__SystemDateTim
     NATIVE_PROFILE_CLR_CORE();
     NANOCLR_HEADER();
 
-    CLR_RT_TypeDescriptor dtType;
-    CLR_INT64*            val;
+    CLR_RT_HeapBlock &ref = stack.PushValue();
 
-    CLR_RT_HeapBlock& ref = stack.PushValue();
-
-    // initialize <DateTime> type descriptor
-    NANOCLR_CHECK_HRESULT(dtType.InitializeFromType(g_CLR_RT_WellKnownTypes.m_DateTime));
-
-    // create an instance of <DateTime>
-    NANOCLR_CHECK_HRESULT(g_CLR_RT_ExecutionEngine.NewObject( ref, dtType.m_handlerCls));
-
-    val = GetValuePtr( ref );
+    CLR_INT64 *val = NewObject(ref);
 
     // load with date part only
     // including UTC flag
-    *val = HAL_Time_CurrentDateTime(true) | s_UTCMask;
+    *val = (CLR_INT64)(HAL_Time_CurrentDateTime(true) | s_UTCMask);
 
-    NANOCLR_NOCLEANUP();
+    NANOCLR_NOCLEANUP_NOLABEL();
+}
+
+//--//
+
+CLR_INT64 *Library_corlib_native_System_DateTime::NewObject(CLR_RT_HeapBlock &ref)
+{
+    NATIVE_PROFILE_CLR_CORE();
+
+    CLR_RT_TypeDescriptor dtType;
+
+    // initialize <DateTime> type descriptor
+    dtType.InitializeFromType(g_CLR_RT_WellKnownTypes.m_DateTime);
+
+    // create an instance of <DateTime>
+    g_CLR_RT_ExecutionEngine.NewObject(ref, dtType.m_handlerCls);
+
+    return GetValuePtr(ref);
 }
 
 //--//

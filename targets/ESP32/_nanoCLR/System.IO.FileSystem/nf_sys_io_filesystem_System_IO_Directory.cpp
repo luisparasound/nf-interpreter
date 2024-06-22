@@ -6,10 +6,21 @@
 #include "nf_sys_io_filesystem.h"
 #include <dirent.h>
 #include <ff.h>
+#include <targetHAL_FileOperation.h>
 
-extern void CombinePathAndName(char *outpath, const char *path1, const char *path2);
-extern char *ConvertToVfsPath(const char *filepath);
 extern SYSTEMTIME GetDateTimeFromStat(time_t *time);
+
+// We will use this to extract the file extension
+const char *get_filename_ext(const char *filename)
+{
+    char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename)
+    {
+        return NULL;
+    }
+
+    return dot + 1;
+}
 
 HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::ExistsNative___STATIC__BOOLEAN__STRING(
     CLR_RT_StackFrame &stack)
@@ -197,7 +208,7 @@ int CountEntries(const char *folderPath, int type)
             }
 
             // check if this is correct type
-            if ((fileInfo->d_type & type))
+            if ((fileInfo->d_type & type) && (strcmp(get_filename_ext(fileInfo->d_name), "sys")))
             {
                 count++;
             }
@@ -209,7 +220,7 @@ int CountEntries(const char *folderPath, int type)
     return count;
 }
 
-HRESULT BuildPathsArray(const char *vfsFolderPath, const char *folderPath, CLR_RT_HeapBlock arrayPaths, int entryType)
+HRESULT BuildPathsArray(const char *vfsFolderPath, const char *folderPath, CLR_RT_HeapBlock * arrayPaths, int entryType)
 {
     char *stringBuffer = NULL;
     char *workingBuffer = NULL;
@@ -221,13 +232,13 @@ HRESULT BuildPathsArray(const char *vfsFolderPath, const char *folderPath, CLR_R
         struct dirent *fileInfo;
 
         // get a pointer to the first object in the array (which is of type <String>)
-        pathEntry = (CLR_RT_HeapBlock *)arrayPaths.DereferenceArray()->GetFirstElement();
+        pathEntry = (CLR_RT_HeapBlock *)arrayPaths->DereferenceArray()->GetFirstElement();
 
         // allocate memory for buffers
         stringBuffer = (char *)platform_malloc(FF_LFN_BUF + 1);
-        workingBuffer = (char *)platform_malloc(2 * FF_LFN_BUF + 1);
+        workingBuffer = (char *)platform_malloc(FF_LFN_BUF + 1);
 
-        // sanity check for successfull malloc
+        // sanity check for successful malloc
         if (stringBuffer == NULL || workingBuffer == NULL)
         {
             // failed to allocate memory
@@ -255,10 +266,10 @@ HRESULT BuildPathsArray(const char *vfsFolderPath, const char *folderPath, CLR_R
             }
 
             // check if this is correct type
-            if ((fileInfo->d_type & entryType))
+            if ((fileInfo->d_type & entryType) && (strcmp(get_filename_ext(fileInfo->d_name), "sys")))
             {
                 // clear working buffer
-                memset(workingBuffer, 0, 2 * FF_LFN_BUF + 1);
+                memset(workingBuffer, 0, FF_LFN_BUF + 1);
 
                 // compose file path
                 CombinePathAndName(workingBuffer, folderPath, fileInfo->d_name);
@@ -322,7 +333,7 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::GetFilesNative___STATI
     if (fileCount > 0)
     {
         // 2nd pass fill directory path names
-        NANOCLR_CHECK_HRESULT(BuildPathsArray(vfsPath, folderPath, folderArrayPaths, DT_REG))
+        NANOCLR_CHECK_HRESULT(BuildPathsArray(vfsPath, folderPath, &folderArrayPaths, DT_REG))
     }
 
     NANOCLR_CLEANUP();
@@ -366,7 +377,7 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::GetDirectoriesNative__
     if (directoryCount > 0)
     {
         // 2nd pass fill directory path names
-        NANOCLR_CHECK_HRESULT(BuildPathsArray(vfsPath, folderPath, folderArrayPaths, DT_DIR))
+        NANOCLR_CHECK_HRESULT(BuildPathsArray(vfsPath, folderPath, &folderArrayPaths, DT_DIR))
     }
 
     NANOCLR_CLEANUP();
@@ -383,6 +394,7 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::GetDirectoriesNative__
 // Enumerate drives in system
 // if array == null then only count drives
 // Return number of drives
+// TO BE REMOVED AFTER managed Directory.GetLogicalDrives() is removed
 static HRESULT EnumerateDrives(CLR_RT_HeapBlock *array, int &count)
 {
     NANOCLR_HEADER();
@@ -451,13 +463,11 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::GetLastWriteTimeNative
     NANOCLR_HEADER();
 
     SYSTEMTIME fileInfoTime;
-    CLR_RT_TypeDescriptor dtType;
     struct stat fileInfo;
     char *vfsPath = NULL;
     CLR_INT64 *pRes;
 
     CLR_RT_HeapBlock &ref = stack.PushValue();
-    ;
 
     const char *folderPath = stack.Arg0().RecoverString();
     FAULT_ON_NULL_ARG(folderPath);
@@ -473,13 +483,9 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_Directory::GetLastWriteTimeNative
     // get the date time details and return it on Stack as DateTime object
     fileInfoTime = GetDateTimeFromStat(&fileInfo.st_mtime);
 
-    // initialize <DateTime> type descriptor
-    NANOCLR_CHECK_HRESULT(dtType.InitializeFromType(g_CLR_RT_WellKnownTypes.m_DateTime));
+    pRes = Library_corlib_native_System_DateTime::NewObject(ref);
+    FAULT_ON_NULL(pRes);
 
-    // create an instance of <DateTime>
-    NANOCLR_CHECK_HRESULT(g_CLR_RT_ExecutionEngine.NewObject(ref, dtType.m_handlerCls));
-
-    pRes = Library_corlib_native_System_DateTime::GetValuePtr(ref);
     *pRes = HAL_Time_ConvertFromSystemTime(&fileInfoTime);
 
     NANOCLR_CLEANUP();

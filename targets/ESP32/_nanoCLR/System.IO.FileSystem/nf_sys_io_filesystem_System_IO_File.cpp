@@ -7,9 +7,7 @@
 
 #include <ff.h>
 #include <nanoHAL_Windows_Storage.h>
-
-extern void CombinePathAndName(char *outpath, const char *path1, const char *path2);
-extern char *ConvertToVfsPath(const char *filepath);
+#include <targetHAL_FileOperation.h>
 
 bool IsInternalFilePath(const char *filePath)
 {
@@ -40,9 +38,9 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_File::ExistsNative___STATIC__BOOL
     // TODO don't really need to pass in path & filename, whole path would have been OK for ESP32
 
     // setup file path
-    filePath = (char *)platform_malloc(2 * FF_LFN_BUF + 1);
+    filePath = (char *)platform_malloc(FF_LFN_BUF + 1);
 
-    // sanity check for successfull malloc
+    // sanity check for successful malloc
     if (filePath == NULL)
     {
         // failed to allocate memory
@@ -50,7 +48,7 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_File::ExistsNative___STATIC__BOOL
     }
 
     // clear working buffer
-    filePath[0] = 0;
+    memset(filePath, 0, FF_LFN_BUF + 1);
 
     // compose file path
     CombinePathAndName(filePath, workingPath, fileName);
@@ -337,7 +335,6 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_File::GetLastWriteTimeNative___ST
     NANOCLR_HEADER();
 
     SYSTEMTIME fileInfoTime;
-    CLR_RT_TypeDescriptor dtType;
     struct stat fileInfo;
     char *vfsPath = NULL;
     CLR_INT64 *pRes;
@@ -357,13 +354,9 @@ HRESULT Library_nf_sys_io_filesystem_System_IO_File::GetLastWriteTimeNative___ST
     // get the date time details and return it on Stack as DateTime object
     fileInfoTime = GetDateTimeFromStat(&(fileInfo.st_mtime));
 
-    // initialize <DateTime> type descriptor
-    NANOCLR_CHECK_HRESULT(dtType.InitializeFromType(g_CLR_RT_WellKnownTypes.m_DateTime));
+    pRes = Library_corlib_native_System_DateTime::NewObject(ref);
+    FAULT_ON_NULL(pRes);
 
-    // create an instance of <DateTime>
-    NANOCLR_CHECK_HRESULT(g_CLR_RT_ExecutionEngine.NewObject(ref, dtType.m_handlerCls));
-
-    pRes = Library_corlib_native_System_DateTime::GetValuePtr(ref);
     *pRes = HAL_Time_ConvertFromSystemTime(&fileInfoTime);
 
     NANOCLR_CLEANUP();

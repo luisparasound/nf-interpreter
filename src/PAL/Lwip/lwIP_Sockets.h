@@ -42,6 +42,8 @@ struct LWIP_SOCKETS_Driver
 {
     static bool Initialize();
 
+    static bool InitializeInterfaceIndex(int i, int interfaceNumber, HAL_Configuration_NetworkInterface &networkConfiguration);
+
     static bool Uninitialize();
 
     static SOCK_SOCKET Socket(int family, int type, int protocol);
@@ -101,9 +103,14 @@ struct LWIP_SOCKETS_Driver
 
     static HRESULT Link_status(uint32_t interfaceIndex, bool *status);
 
-    static HRESULT IPAddressFromString(const char *ipString, uint64_t *address);
+    static HRESULT IPV4AddressFromString(const char *ipString, uint64_t *address);
 
-    static const char *IPAddressToString(uint32_t address);
+    static const char *IP4AddressToString(uint32_t address);
+
+#if LWIP_IPV6
+    static HRESULT IPV6AddressFromString(const char *ipString, uint16_t *address);
+    static const char *IP6AddressToString(uint16_t *addr);
+#endif
 
     static HRESULT LoadAdapterConfiguration(HAL_Configuration_NetworkInterface *config, uint32_t interfaceIndex);
 
